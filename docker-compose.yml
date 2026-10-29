@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: orderflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-orderflow}
+      POSTGRES_USER: ${DB_USER:-orderflow}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-orderflow}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-orderflow} -d ${DB_NAME:-orderflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - orderflow-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: orderflow-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - orderflow-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orderflow-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-orderflow}
+      DB_USER: ${DB_USER:-orderflow}
+      DB_PASSWORD: ${DB_PASSWORD:-orderflow}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+    networks:
+      - orderflow-net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  orderflow-net:
+    driver: bridge
