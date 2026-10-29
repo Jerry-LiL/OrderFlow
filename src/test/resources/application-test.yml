@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: false
+
+orderflow:
+  cache:
+    redis:
+      enabled: false
+  jwt:
+    secret: test-secret-key-must-be-at-least-256-bits-long-for-hmac-sha-256-security-12345
+    expiration-ms: 3600000
