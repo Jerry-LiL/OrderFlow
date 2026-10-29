@@ -1,0 +1,180 @@
+{
+  "info": {
+    "name": "OrderFlow API",
+    "_postman_id": "9b12a845-a92c-4f92-9130-1bfa2b3c4f56",
+    "description": "OrderFlow REST API collection for order management, stock reservation with optimistic locking, Redis catalog cache, and webhook outbox dispatching.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Customer",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice\",\n  \"email\": \"alice@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "register"]}
+          }
+        },
+        {
+          "name": "Login (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "login"]}
+          }
+        },
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "me"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List Catalog (Paginated)",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{baseUrl}}/api/v1/products?page=0&size=10&category=Electronics", "host": ["{{baseUrl}}"], "path": ["api", "v1", "products"], "query": [{"key": "page", "value": "0"}, {"key": "size", "value": "10"}, {"key": "category", "value": "Electronics"}]}
+          }
+        },
+        {
+          "name": "Get Product by ID (Redis Cached)",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{baseUrl}}/api/v1/products/1", "host": ["{{baseUrl}}"], "path": ["api", "v1", "products", "1"]}
+          }
+        },
+        {
+          "name": "Create Product (Admin/Manager)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"PROD-CUSTOM-001\",\n  \"name\": \"Ultra Keyboard\",\n  \"description\": \"Mechanical wireless keyboard\",\n  \"price\": 149.99,\n  \"stockQuantity\": 50,\n  \"category\": \"Accessories\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/products", "host": ["{{baseUrl}}"], "path": ["api", "v1", "products"]}
+          }
+        },
+        {
+          "name": "Update Stock Delta (Admin/Manager)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delta\": 10\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/products/1/stock", "host": ["{{baseUrl}}"], "path": ["api", "v1", "products", "1", "stock"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order (Checkout)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 1\n    }\n  ],\n  \"shippingAddress\": \"742 Evergreen Terrace, Springfield\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/orders", "host": ["{{baseUrl}}"], "path": ["api", "v1", "orders"]}
+          }
+        },
+        {
+          "name": "List Orders (Filter by Status & Date)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/orders?status=PENDING&page=0&size=10", "host": ["{{baseUrl}}"], "path": ["api", "v1", "orders"], "query": [{"key": "status", "value": "PENDING"}, {"key": "page", "value": "0"}, {"key": "size", "value": "10"}]}
+          }
+        },
+        {
+          "name": "Get Order By ID",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/orders/1", "host": ["{{baseUrl}}"], "path": ["api", "v1", "orders", "1"]}
+          }
+        },
+        {
+          "name": "Update Order Status (Manager/Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PAID\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/orders/1/status", "host": ["{{baseUrl}}"], "path": ["api", "v1", "orders", "1", "status"]}
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/orders/1/cancel", "host": ["{{baseUrl}}"], "path": ["api", "v1", "orders", "1", "cancel"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Create Webhook Subscription",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://webhook.site/test-uuid\",\n  \"secret\": \"whsec_0123456789abcdef\",\n  \"eventTypes\": \"order.created,order.status_changed,order.cancelled\"\n}"
+            },
+            "url": {"raw": "{{baseUrl}}/api/v1/webhooks/subscriptions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "webhooks", "subscriptions"]}
+          }
+        },
+        {
+          "name": "List Webhook Deliveries (Outbox)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/webhooks/deliveries", "host": ["{{baseUrl}}"], "path": ["api", "v1", "webhooks", "deliveries"]}
+          }
+        },
+        {
+          "name": "Retry Delivery",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwtToken}}"}],
+            "url": {"raw": "{{baseUrl}}/api/v1/webhooks/deliveries/1/retry", "host": ["{{baseUrl}}"], "path": ["api", "v1", "webhooks", "deliveries", "1", "retry"]}
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8080"},
+    {"key": "jwtToken", "value": ""}
+  ]
+}
