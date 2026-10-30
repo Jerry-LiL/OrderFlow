@@ -111,7 +111,7 @@ erDiagram
 - **Caching**: Redis 7, Spring Cache abstraction
 - **Security**: JWT (JJWT 0.12.6) with HMAC-SHA256, BCrypt password hashing
 - **API Documentation**: springdoc OpenAPI 3 / Swagger UI (`/swagger-ui.html`)
-- **Testing**: JUnit 5, Mockito, Spring Boot Test, H2, Testcontainers, JaCoCo
+- **Testing**: JUnit 5, Mockito, Spring Boot Test (MockMvc), H2 in PostgreSQL mode, JaCoCo
 - **Containerization**: Multi-stage `Dockerfile`, `docker-compose.yml`
 - **CI/CD**: GitHub Actions
 
@@ -174,10 +174,9 @@ Stress test (`ConcurrentCheckoutTest`) with 50 concurrent threads competing for 
 | **Execution Duration** | 90 - 113 ms |
 
 ### 3. Test Suite & Code Coverage
-Measured via JaCoCo across 52 automated tests:
+See the [Testing](#testing) section below for the full breakdown.
 
-| Package / Layer | Line Coverage | Covered Lines / Total |
-|---|---|---|
+---|---|---|
 | `com.orderflow.service.AuthService` | 97.7% | 42 / 43 |
 | `com.orderflow.service.ProductService` | 100.0% | 52 / 52 |
 | `com.orderflow.service.WebhookService` | 100.0% | 30 / 30 |
@@ -185,6 +184,33 @@ Measured via JaCoCo across 52 automated tests:
 | `com.orderflow.service.WebhookDispatcher` | 83.1% | 74 / 89 |
 | **Total Service Layer Line Coverage** | **92.9%** | **290 / 312** |
 | **Total Service Instruction Coverage**| **87.6%** | **1,114 / 1,272** |
+
+---
+
+## Testing
+
+`./mvnw test` runs 52 tests in 11 test classes. All pass locally and in GitHub Actions (`./mvnw -B verify`). A local run takes about 20 seconds wall time.
+
+| Layer | Classes | Tests | What it checks |
+|---|---|---|---|
+| Unit (JUnit 5 + Mockito) | `AuthServiceTest`, `ProductServiceTest`, `OrderServiceTest`, `WebhookServiceTest`, `WebhookDispatcherTest` | 39 | Service logic with repositories and HTTP clients mocked: happy paths, validation errors, not-found and stock-conflict branches, webhook retries |
+| Specification | `OrderSpecificationTest` | 2 | JPA filter predicates for order search |
+| Integration (`@SpringBootTest` + MockMvc) | `AuthControllerIntegrationTest`, `ProductControllerIntegrationTest`, `OrderControllerIntegrationTest`, `WebhookControllerIntegrationTest` | 10 | Full Spring context, security filter chain, JSON request/response and HTTP status codes against an H2 database in PostgreSQL mode |
+| Concurrency | `ConcurrentCheckoutTest` | 1 | 50 threads released together by a `CountDownLatch` try to buy 10 units of one product |
+
+Concurrent checkout: the test asserts that exactly 10 orders succeed and final stock is exactly 0 (never negative). The split between optimistic-lock conflicts and out-of-stock rejections depends on thread timing; one local run on 30 Oct 2026 logged 10 successes, 38 optimistic-lock conflicts, 2 out-of-stock rejections and 0 other failures.
+
+Coverage (JaCoCo, same run): 80.2% of lines overall (745 / 929) and 92.6% of lines in the service layer (289 / 312).
+
+Integration tests use H2, not a real PostgreSQL instance. The Testcontainers dependency is in `pom.xml`, but no test uses it yet, so Postgres-specific behaviour (Flyway scripts, native SQL) is only exercised when the app runs against the Docker Compose database.
+
+Run the tests:
+
+```bash
+./mvnw test                               # all 52 tests
+./mvnw test -Dtest=ConcurrentCheckoutTest # only the concurrency test
+./mvnw verify                             # tests + JaCoCo report in target/site/jacoco/index.html
+```
 
 ---
 
@@ -456,7 +482,7 @@ In `docker-compose.yml`, environment variables are injected into container envir
 
 ### 9. How do you test service methods in isolation vs. with a real PostgreSQL container?
 - **Unit Testing**: Service classes (`AuthServiceTest`, `ProductServiceTest`, `OrderServiceTest`, `WebhookDispatcherTest`) are tested in memory using JUnit 5 and Mockito (`@ExtendWith(MockitoExtension.class)`). Repositories and external HTTP clients are mocked to verify domain logic, edge conditions, and error paths in isolation with sub-second execution.
-- **Slice / Integration Testing**: Controllers and repositories are tested using `@SpringBootTest` with `@ActiveProfiles("test")` backed by an in-memory database configured for PostgreSQL syntax compatibility. For production parity verification, Testcontainers spins up an ephemeral PostgreSQL Docker container to validate Flyway migration scripts, database dialect constraints, and native queries.
+- **Slice / Integration Testing**: Controllers and repositories are tested using `@SpringBootTest` with `@ActiveProfiles("test")` backed by an in-memory database configured for PostgreSQL syntax compatibility. H2 runs in PostgreSQL compatibility mode. Testcontainers is on the classpath, but no test starts a real PostgreSQL container yet; that is the next step for checking Flyway scripts and native queries against the real database.
 
 ### 10. If order volume grows 10x, which bottleneck hits first in this single-node setup and how would you decouple it?
 The first bottleneck would be **PostgreSQL transactional write contention on hot inventory rows** and the database connection pool. If hundreds of concurrent checkouts hit the same popular product SKU, optimistic lock collisions will spike, causing frequent rollbacks and retries.
